@@ -3,7 +3,7 @@
         //     [0, 0, 0, 0]
         // ]
 
-        // grid[x][y]
+        // grid[y][x]
 class Cell {
     constructor ( x, y, cellSize) {
         this.x = x;
@@ -11,6 +11,7 @@ class Cell {
         this.cellSize = cellSize;
         this.isRevealed = false;
         this.isMine = false;
+        this.neighbouringMineCount = 0;
     }
 }
 
@@ -46,6 +47,11 @@ class MineSweeper {
 
         this.createMineField();
         this.placeMines();
+        this.countNeighbouringMines();
+
+
+        this.remainingCells = this.mineField.flat().length - this.mineCount;
+
         this.draw();
 
 
@@ -55,29 +61,63 @@ class MineSweeper {
 
             const cell = this.getCellByCoordinates(clickX, clickY);
 
+            if ( cell.isRevealed ) return;
+
+            if ( cell.isMine ) return this.gameOver();
+
             cell.isRevealed = true;
+            this.remainingCells--;
+
+            this.checkForWin();
+
+            this.floodFill(cell);
+
             this.draw();
         })
     }
 
+    floodFill (cell) {
+        if (cell.neighbouringMineCount === 0) {
+            if (cell.x - 1 >= 0) {
+                const lc = this.mineField[cell.y][cell.x - 1];
+                if (!lc.isRevealed) {
+                    lc.isRevealed = true;
+                    if (lc.neighbouringMineCount === 0) {
+                        this.floodFill(lc);
+                    }
+                } 
+            }
+            if (cell.x + 1 < this.cols) {
+                const rc = this.mineField[cell.y][cell.x + 1];
+                if (!rc.isRevealed) {
+                    rc.isRevealed = true;
+                    if (rc.neighbouringMineCount === 0) {
+                        this.floodFill(rc);
+                    }
+                } 
+            }
+            if (cell.y - 1 >= 0) {
+                const tc = this.mineField[cell.y - 1][cell.x];
+                if (!tc.isRevealed) {
+                    tc.isRevealed = true;
+                    if (tc.neighbouringMineCount === 0) {
+                        this.floodFill(tc);
+                    }
+                } 
+            }
+            if (cell.y + 1 < this.rows) {
+                const bc = this.mineField[cell.y + 1][cell.x];
+                if (!bc.isRevealed) {
+                    bc.isRevealed = true;
+                    if (bc.neighbouringMineCount === 0) {
+                        this.floodFill(bc);
+                    }
+                } 
+            }
+        }
+    }
+
     getCellByCoordinates(xPos, yPos) {
-        // for ( let y = 0; y < this.rows; y++ ) {
-        //     for ( let x = 0; x < this.cols; x++ ) {
-        //         const cell = this.mineField[y][x];
-        //     }
-        // }
-
-        // this.mineField.find( cell => {
-        //     if (
-        //         cell.x < xPos &&
-        //         cell.y < yPos &&
-        //         cell.x + cell.cellSize > xPos &&
-        //         cell.y + cell.cellSize > yPos
-        //     ) {
-        //         return cell;
-        //     }
-        // })
-
         return this.mineField[Math.floor(yPos / this.cellSize)][Math.floor(xPos / this.cellSize)];
     }
 
@@ -93,22 +133,59 @@ class MineSweeper {
 
     placeMines () {
         let minesLeft = this.mineCount;
+
         while (minesLeft > 0) {
             const x = Math.floor(Math.random() * this.cols);
             const y = Math.floor(Math.random() * this.rows);
 
-            if (this.mineField[y][x].isMine) {
-                return;
-            }
-
-            console.log(`place mine at ${y}:${x}`);
+            if (this.mineField[y][x].isMine) continue;
 
             this.mineField[y][x].isMine = true;
 
             minesLeft--;
         }
+    }
 
-        console.log(this.mineField);
+    countNeighbouringMines () {
+        for ( let y = 0; y < this.rows; y++ ) {
+            for( let x = 0; x < this.cols; x++ ) {
+                const cell = this.mineField[y][x];
+
+                let xPos = x - 1;
+                let yPos = y - 1;
+
+                for (let xPos = 0; xPos < 9; xPos++) {
+                    for (let yPos = 0; yPos < 9; yPos++) {
+                        const c = this.mineField[yPos][xPos];
+
+                        if (c === cell) continue;
+                        if (c.x > cell.x + 1 || c.x < cell.x - 1 || c.y > cell.y + 1 || c.y < cell.y - 1) continue;
+                        if (!c.isMine) continue;
+
+                        cell.neighbouringMineCount++;
+                    }
+                }
+            }
+        }
+    }
+
+    gameOver () {
+        for ( let y = 0; y < this.rows; y++ ) {
+            for ( let x = 0; x < this.cols; x++) {
+                const cell = this.mineField[y][x];
+                cell.isRevealed = true;
+            }
+        }
+        
+        this.draw();
+
+        alert("GAME OVER!");
+    }
+
+    checkForWin () {
+       this.remainingCells = this.mineField.flat().filter( cell => !cell.isMine && !cell.isRevealed );
+       
+       if (this.remainingCells.length === 0) alert("YOU WIN!");
     }
 
     draw () {
@@ -119,28 +196,33 @@ class MineSweeper {
                 const cell = this.mineField[y][x];
 
                 this.contex.beginPath();
-
-
-                //styles
                 this.contex.strokeStyle = '#222';
-
-
                 this.contex.rect(x * this.cellSize, y * this.cellSize, this.cellSize, this.cellSize);
                 
-                if (!cell.isRevealed) {
-                    this.contex.fillStyle = '#000';
-                    this.contex.fill();
-                }
 
-                if (cell.isMine) {
+                if (cell.isRevealed && cell.isMine) {
                     this.contex.fillStyle = '#f00';
                     this.contex.fill();
                 }
 
+
+                if (cell.neighbouringMineCount > 0) {
+                    this.contex.fillStyle = '#000';
+                    this.contex.textAlign = 'center';
+                    this.contex.textBaseline = 'middle'; 
+                    this.contex.font = '15px Arial';
+                    this.contex.fillText(cell.neighbouringMineCount, cell.x * this.cellSize + this.cellSize / 2,
+                                            cell.y * this.cellSize + this.cellSize / 2);
+    
+                }
+               
+                if (!cell.isRevealed) {
+                    this.contex.fillStyle = '#ccc';
+                    this.contex.fill();
+                }
+                                        
                 this.contex.stroke();
-
                 this.contex.closePath();
-
             }
         }
     }
